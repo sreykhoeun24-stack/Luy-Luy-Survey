@@ -1,0 +1,252 @@
+{
+  "entities": {
+    "ManualTask": {
+      "title": "ManualTask",
+      "description": "A task added manually by the admin",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "url": { "type": "string" },
+        "payout_usd": { "type": "number", "description": "Total payout from provider in USD" },
+        "user_reward_usd": { "type": "number", "description": "Calculated reward for user in USD" },
+        "active": { "type": "boolean" },
+        "created_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "url", "payout_usd", "user_reward_usd", "active", "created_at"]
+    },
+    "TaskSubmission": {
+      "title": "TaskSubmission",
+      "description": "A user's submission for a manual task",
+      "type": "object",
+      "properties": {
+        "task_id": { "type": "string" },
+        "task_title": { "type": "string" },
+        "user_id": { "type": "string" },
+        "user_name": { "type": "string" },
+        "screenshot_url": { "type": "string" },
+        "qr_url": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "payout_usd": { "type": "number" },
+        "admin_profit_usd": { "type": "number" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["task_id", "user_id", "status", "timestamp"]
+    },
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile and balance information",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "The unique user ID from Firebase Auth" },
+        "display_name": { "type": "string", "description": "The user's display name" },
+        "verified_balance": { "type": "number", "description": "The user's verified balance in USD" },
+        "aba_status": { "type": "boolean", "description": "Whether a payout has been requested" },
+        "qr_url": { "type": "string", "description": "The URL of the user's ABA QR code" },
+        "email": { "type": "string", "description": "The user's email address" },
+        "role": { "type": "string", "enum": ["admin", "specialist"], "description": "The user's role" }
+      },
+      "required": ["uid", "display_name", "verified_balance", "aba_status", "email", "role"]
+    },
+    "PayoutHistory": {
+      "title": "PayoutHistory",
+      "description": "A record of a payout from a survey provider",
+      "type": "object",
+      "properties": {
+        "amount": { "type": "number", "description": "Amount in USD" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "source": { "type": "string" },
+        "status": { "type": "string" },
+        "survey_id": { "type": "string" }
+      },
+      "required": ["amount", "timestamp", "source", "status"]
+    },
+    "Survey": {
+      "title": "Survey",
+      "description": "A survey for specialists to complete",
+      "type": "object",
+      "properties": {
+        "survey_id": { "type": "string" },
+        "provider_url": { "type": "string" },
+        "total_provider_reward": { "type": "number", "description": "Total reward from provider in USD" },
+        "user_display_reward": { "type": "number", "description": "Reward displayed to user in USD" },
+        "active": { "type": "boolean" },
+        "created_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["survey_id", "provider_url", "total_provider_reward", "user_display_reward", "active"]
+    },
+    "AdminFinances": {
+      "title": "AdminFinances",
+      "description": "Tracking admin profits",
+      "type": "object",
+      "properties": {
+        "total_profit_usd": { "type": "number" },
+        "last_updated": { "type": "string", "format": "date-time" }
+      },
+      "required": ["total_profit_usd", "last_updated"]
+    },
+    "ProfitLog": {
+      "title": "ProfitLog",
+      "description": "Log of profit from a survey completion",
+      "type": "object",
+      "properties": {
+        "amount_usd": { "type": "number" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "survey_id": { "type": "string" },
+        "user_id": { "type": "string" }
+      },
+      "required": ["amount_usd", "timestamp", "survey_id", "user_id"]
+    },
+    "SystemSetting": {
+      "title": "SystemSetting",
+      "description": "Dynamic configuration settings for the application",
+      "type": "object",
+      "properties": {
+        "key": { "type": "string", "description": "The name of the setting" },
+        "value": { "type": "string", "description": "The value of the setting" },
+        "description": { "type": "string", "description": "A description of what this setting does" },
+        "updated_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["key", "value"]
+    },
+    "ChatMessage": {
+      "title": "ChatMessage",
+      "description": "A message in a chat",
+      "type": "object",
+      "properties": {
+        "text": { "type": "string" },
+        "image_url": { "type": "string" },
+        "sender_id": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "is_admin": { "type": "boolean" }
+      },
+      "required": ["sender_id", "timestamp"]
+    },
+    "Post": {
+      "title": "Post",
+      "description": "A social post in the activity feed",
+      "type": "object",
+      "properties": {
+        "author_id": { "type": "string" },
+        "author_name": { "type": "string" },
+        "author_photo": { "type": "string" },
+        "content": { "type": "string" },
+        "image_url": { "type": "string" },
+        "likes_count": { "type": "number" },
+        "comments_count": { "type": "number" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["author_id", "author_name", "timestamp"]
+    },
+    "Comment": {
+      "title": "Comment",
+      "description": "A comment on a post",
+      "type": "object",
+      "properties": {
+        "author_id": { "type": "string" },
+        "author_name": { "type": "string" },
+        "content": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["author_id", "author_name", "content", "timestamp"]
+    },
+    "FriendRequest": {
+      "title": "FriendRequest",
+      "description": "A request to connect with another specialist",
+      "type": "object",
+      "properties": {
+        "from_id": { "type": "string" },
+        "from_name": { "type": "string" },
+        "to_id": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "accepted", "declined"] },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["from_id", "to_id", "status", "timestamp"]
+    },
+    "Conversation": {
+      "title": "Conversation",
+      "description": "A peer-to-peer chat conversation",
+      "type": "object",
+      "properties": {
+        "participants": { "type": "array", "items": { "type": "string" } },
+        "last_message": { "type": "string" },
+        "last_timestamp": { "type": "string", "format": "date-time" },
+        "unread_count": { "type": "object" }
+      },
+      "required": ["participants", "last_timestamp"]
+    },
+    "Settlement": {
+      "title": "Settlement",
+      "description": "A record of a cash settlement paid to a specialist",
+      "type": "object",
+      "properties": {
+        "amount": { "type": "number" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "admin_uid": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["amount", "timestamp", "status"]
+    }
+  },
+  "firestore": {
+    "/manual_tasks/{taskId}": {
+      "schema": "ManualTask",
+      "description": "Tasks added manually by admin"
+    },
+    "/task_submissions/{submissionId}": {
+      "schema": "TaskSubmission",
+      "description": "User submissions for manual tasks"
+    },
+    "/users/{uid}": {
+      "schema": "UserProfile",
+      "description": "User profiles keyed by UID"
+    },
+    "/users/{uid}/payout_history/{payoutId}": {
+      "schema": "PayoutHistory",
+      "description": "History of payouts from survey providers for a user"
+    },
+    "/users/{uid}/settlements/{settlementId}": {
+      "schema": "Settlement",
+      "description": "History of cash settlements for a user"
+    },
+    "/chats/{uid}/messages/{messageId}": {
+      "schema": "ChatMessage",
+      "description": "Chat messages for a specific user"
+    },
+    "/posts/{postId}": {
+      "schema": "Post",
+      "description": "Social posts in the feed"
+    },
+    "/posts/{postId}/comments/{commentId}": {
+      "schema": "Comment",
+      "description": "Comments on a post"
+    },
+    "/friend_requests/{requestId}": {
+      "schema": "FriendRequest",
+      "description": "Friend requests between users"
+    },
+    "/conversations/{convId}": {
+      "schema": "Conversation",
+      "description": "P2P chat conversations"
+    },
+    "/conversations/{convId}/messages/{msgId}": {
+      "schema": "ChatMessage",
+      "description": "Messages within a P2P conversation"
+    },
+    "/surveys/{surveyId}": {
+      "schema": "Survey",
+      "description": "Available surveys"
+    },
+    "/admin_finances/stats": {
+      "schema": "AdminFinances",
+      "description": "Global admin financial stats"
+    },
+    "/admin_finances_logs/{logId}": {
+      "schema": "ProfitLog",
+      "description": "Logs of admin profit"
+    },
+    "/settings/{settingId}": {
+      "schema": "SystemSetting",
+      "description": "Global application settings"
+    }
+  }
+}

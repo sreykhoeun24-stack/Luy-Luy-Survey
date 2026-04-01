@@ -1,0 +1,268 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() && 
+        (request.auth.uid == "J2sAWRrptHZStncbx2R9jzlz3zg2" ||
+         request.auth.token.email == "sreykhoeun24@gmail.com" ||
+         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'));
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function isValidMessage(data) {
+      return data.keys().hasAll(['sender_id', 'timestamp']) &&
+             data.sender_id is string &&
+             data.timestamp is timestamp &&
+             (data.text is string || data.image_url is string);
+    }
+
+    function isValidSettlement(data) {
+      return data.keys().hasAll(['amount', 'timestamp', 'status']) &&
+             data.amount is number &&
+             data.timestamp is timestamp &&
+             data.status is string;
+    }
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'display_name', 'verified_balance', 'aba_status', 'email', 'role']) &&
+             data.uid is string &&
+             data.display_name is string && data.display_name.size() > 0 && data.display_name.size() < 100 &&
+             data.verified_balance is number &&
+             data.aba_status is bool &&
+             data.email is string && isValidEmail(data.email) &&
+             data.role in ['admin', 'specialist'];
+    }
+
+    function isValidSetting(data) {
+      return data.keys().hasAll(['key', 'value']) &&
+             data.key is string && data.key.size() > 0 && data.key.size() < 100 &&
+             data.value is string && data.value.size() > 0 && data.value.size() < 10000;
+    }
+
+    function isFriend(userId, otherId) {
+      return exists(/databases/$(database)/documents/users/$(userId)/friends/$(otherId));
+    }
+
+    function isValidPost(data) {
+      return data.keys().hasAll(['author_id', 'author_name', 'content', 'timestamp']) &&
+             data.author_id is string &&
+             data.author_name is string &&
+             data.content is string && data.content.size() < 5000 &&
+             data.timestamp is timestamp;
+    }
+
+    function isValidComment(data) {
+      return data.keys().hasAll(['author_id', 'author_name', 'content', 'timestamp']) &&
+             data.author_id is string &&
+             data.author_name is string &&
+             data.content is string && data.content.size() < 1000 &&
+             data.timestamp is timestamp;
+    }
+
+    // ===============================================================
+    // Collection: manual_tasks
+    // ===============================================================
+    match /manual_tasks/{taskId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ===============================================================
+    // Collection: task_submissions
+    // ===============================================================
+    match /task_submissions/{submissionId} {
+      allow read: if isAuthenticated() && (request.auth.uid == resource.data.user_id || isAdmin());
+      allow create: if isAuthenticated() && request.auth.uid == request.resource.data.user_id && request.resource.data.status == 'pending';
+      allow update: if isAdmin();
+      allow delete: if false;
+    }
+
+    // ===============================================================
+    // Collection: users
+    // ===============================================================
+    match /users/{userId} {
+      // Admin can do anything
+      // Users can read their own profile or their friends' profiles
+      allow read: if isOwner(userId) || isAdmin() || (isAuthenticated() && isFriend(request.auth.uid, userId));
+      
+      // Users can create their own profile with initial values
+      allow create: if isOwner(userId) && 
+                      isValidUser(request.resource.data) &&
+                      request.resource.data.verified_balance == 0 &&
+                      request.resource.data.aba_status == false &&
+                      request.resource.data.uid == request.auth.uid &&
+                      (request.resource.data.role == 'specialist' || (request.resource.data.role == 'admin' && isAdmin()));
+
+      // Users can update their own profile, but cannot change their balance unless they are admin
+      // Users can change their aba_status to true (request payout)
+      // Admin can update anything (e.g., reset balances)
+      allow update: if isAdmin() || 
+                      (isOwner(userId) && 
+                       isValidUser(request.resource.data) &&
+                       request.resource.data.uid == resource.data.uid &&
+                       request.resource.data.email == resource.data.email &&
+                       (request.resource.data.verified_balance == resource.data.verified_balance || isAdmin()) &&
+                       (request.resource.data.aba_status == true || request.resource.data.aba_status == resource.data.aba_status)
+                      );
+      
+      allow delete: if isAdmin();
+
+      // Friends subcollection
+      match /friends/{friendId} {
+        allow read: if isOwner(userId) || isAdmin();
+        allow write: if isAdmin(); // Managed by server/admin logic or specific friend request acceptance
+      }
+    }
+
+    // ===============================================================
+    // Collection: posts
+    // ===============================================================
+    match /posts/{postId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && request.resource.data.author_id == request.auth.uid && isValidPost(request.resource.data);
+      allow update: if (isAuthenticated() && (resource.data.author_id == request.auth.uid || isAdmin())) || 
+                      (isAuthenticated() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes_count', 'liked_by', 'comments_count']));
+      allow delete: if isAdmin() || (isAuthenticated() && resource.data.author_id == request.auth.uid);
+
+      match /comments/{commentId} {
+        allow read: if isAuthenticated();
+        allow create: if isAuthenticated() && request.resource.data.author_id == request.auth.uid && isValidComment(request.resource.data);
+        allow delete: if isAdmin() || (isAuthenticated() && resource.data.author_id == request.auth.uid);
+      }
+    }
+
+    // ===============================================================
+    // Collection: friend_requests
+    // ===============================================================
+    match /friend_requests/{requestId} {
+      allow read: if isAuthenticated() && (request.auth.uid == resource.data.from_id || request.auth.uid == resource.data.to_id || isAdmin());
+      allow create: if isAuthenticated() && request.resource.data.from_id == request.auth.uid;
+      allow update: if isAuthenticated() && (request.auth.uid == resource.data.to_id || isAdmin());
+      allow delete: if isAuthenticated() && (request.auth.uid == resource.data.from_id || request.auth.uid == resource.data.to_id || isAdmin());
+    }
+
+    // ===============================================================
+    // Collection: conversations
+    // ===============================================================
+    match /conversations/{convId} {
+      allow read: if isAuthenticated() && (request.auth.uid in resource.data.participants || isAdmin());
+      allow create: if isAuthenticated() && request.auth.uid in request.resource.data.participants;
+      allow update: if isAuthenticated() && (request.auth.uid in resource.data.participants || isAdmin());
+
+      match /messages/{messageId} {
+        allow read: if isAuthenticated() && (request.auth.uid in get(/databases/$(database)/documents/conversations/$(convId)).data.participants || isAdmin());
+        allow create: if isAuthenticated() && (request.auth.uid in get(/databases/$(database)/documents/conversations/$(convId)).data.participants || isAdmin()) && isValidMessage(request.resource.data);
+      }
+    }
+
+    // ===============================================================
+    // Collection: balance_history
+    // ===============================================================
+    match /users/{userId}/balance_history/{historyId} {
+      // Admin can read/write history
+      // Users can read their own history
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isAdmin();
+      allow update, delete: if false; // History should be immutable
+    }
+
+    // ===============================================================
+    // Collection: payout_history
+    // ===============================================================
+    match /users/{userId}/payout_history/{payoutId} {
+      // Admin can read/write history
+      // Users can read their own history
+      allow read: if isOwner(userId) || isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // ===============================================================
+    // Collection: settlements
+    // ===============================================================
+    match /users/{userId}/settlements/{settlementId} {
+      // Admin can read/write settlements
+      // Users can read their own settlements
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isAdmin() && isValidSettlement(request.resource.data);
+      allow update, delete: if false;
+    }
+
+    // ===============================================================
+    // Collection: chats
+    // ===============================================================
+    match /chats/{userId} {
+      allow read: if request.auth.uid == userId || isAdmin();
+      
+      match /messages/{messageId} {
+        // Admin can read/write messages
+        // Users can read/write their own messages
+        allow read: if request.auth.uid == userId || isAdmin();
+        allow create: if (request.auth.uid == userId || isAdmin()) && isValidMessage(request.resource.data);
+        allow update, delete: if false;
+      }
+    }
+
+    // ===============================================================
+    // Collection: admin_finances
+    // ===============================================================
+    match /admin_finances/{allPaths=**} {
+      allow read, write: if isAdmin();
+    }
+
+    match /admin_finances_logs/{allPaths=**} {
+      allow read, write: if isAdmin();
+    }
+
+    match /admin_revenue/{allPaths=**} {
+      allow read, write: if isAdmin();
+    }
+
+    // ===============================================================
+    // Collection: unauthorized_postbacks
+    // ===============================================================
+    match /unauthorized_postbacks/{allPaths=**} {
+      allow read, write: if isAdmin();
+    }
+
+    // ===============================================================
+    // Collection: surveys
+    // ===============================================================
+    match /surveys/{surveyId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    // ===============================================================
+    // Collection: survey_completions
+    // ===============================================================
+    match /survey_completions/{completionId} {
+      allow read: if isAdmin() || (isAuthenticated() && request.auth.uid == resource.data.user_id);
+      allow create: if isAuthenticated() && request.resource.data.user_id == request.auth.uid;
+      allow update, delete: if false;
+    }
+    // ===============================================================
+    // Collection: settings
+    // ===============================================================
+    match /settings/{settingId} {
+      allow read: if isAuthenticated() && 
+                    (!(resource.data.key in ['vault_api_key', 'vault_secure_hash']) || isAdmin());
+      allow write: if isAdmin();
+    }
+  }
+}
